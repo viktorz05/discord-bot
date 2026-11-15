@@ -1,5 +1,6 @@
+use serenity::model::event::ReadyEvent;
 use thiserror::Error;
-use crate::booking::{UserRequest, Booking};
+use crate::booking::{RequestError};
 use chrono_tz::Tz;
 use chrono::{
     DateTime,
@@ -10,30 +11,27 @@ use chrono::{
     Utc,
     Datelike
 };
-#[derive(Error, Debug)]
-enum RequestError {
-    #[error("Duration must not exceed 24 hours. Entered {found:?}")]
-    DurationTooLong { found: String },
-    #[error("Could not read duration {found:?}. \n Accepted formats: 2h, 1.5hr, 90m")]
-    InvalidDurationFormat { found: String },
-    #[error("Could not read the time: {found:?}. Try '2 pm', '14:00' or '2:00 PM'")]
-    InvalidTimeFormat { found: String },
-    #[error("That start time is in the past.")]
-    PastDate,
-}
 
 pub fn parse_time(time: &str) -> Result<NaiveTime, RequestError> {
-    Ok(())
+    let s = time.trim().to_uppercase();
+    for fmt in ["%H:%M", "%I:%M %p", "%I:%M%p", "%I %p", "%I%p"] { // 23:00, 12:30 AM, 12:30AM, 10 AM, 10AM
+        if let Ok(t) = NaiveTime::parse_from_str(&time, fmt) {
+            return Ok(t);
+        }
+    }
+    Err(RequestError::InvalidTimeFormat { found: s })
 }
 
 pub fn parse_date(date: &str) -> Result<NaiveDate, RequestError> {
-    todo!()
+    let s = date.trim().replace('/', "-");
+    if let Ok(d) = NaiveDate::parse_from_str(&s, "%Y-%m-%d") {
+        return Ok(d);
+    }
+    Err(RequestError::InvalidDateFormat { found: s })
 }
 
-pub fn parse_duration(duration: &str) -> Result<Duration, RequestError> {
-    todo!()
-}
-
-pub fn build_booking(req: UserRequest) -> Result<Booking, RequestError> {
-    todo!()
+pub(crate) fn to_local(tz: Tz, day: NaiveDate, time: NaiveTime) -> Result<DateTime<Tz>, RequestError> {
+    tz.from_local_datetime(&day.and_time(time))
+        .single()
+        .ok_or(RequestError::AmbiguousLocalTime)
 }
