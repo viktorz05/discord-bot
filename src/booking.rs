@@ -1,5 +1,5 @@
 use thiserror::Error;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Timelike, Utc};
 use chrono_tz::Tz;
 use crate::parse;
 pub enum Status {
@@ -22,7 +22,10 @@ pub enum RequestError {
     TooLong { max_hours: i64 },
 
     #[error("The time you entered is ambiguous.")]
-    AmbiguousLocalTime
+    AmbiguousLocalTime,
+
+    #[error("The date you entered is out of range.")]
+    DateOutOfRange
 }
 
 pub struct UserRequest {
@@ -32,7 +35,7 @@ pub struct UserRequest {
     pub description: Option<String>
 }
 pub struct Booking {
-    pub date: DateTime<Utc>,
+    pub date: NaiveDate, 
     pub start: DateTime<Utc>,
     pub end: DateTime<Utc>,
     pub user: String,
@@ -47,27 +50,34 @@ impl Booking {
         tz: Tz,
         now: DateTime<Utc>
     ) -> Result<Self, RequestError> {
+        // Local time
         let now_local = now.with_timezone(&tz);
         let today = now_local.date_naive();
-        let start_time = parse::parse_time(&req.start_time)?;
-        let end_time = req.end_time;
+
+        let start_req = parse::parse_time(&req.start_time)?;
+        let end_req = parse::parse_time(&req.end_time)?;
+
         let mut date = match &req.date {
             Some(d) => parse::parse_date(&d)?,
             None => today, 
         };
-        let mut start = parse::to_local(tz, date, start_time)?;
+        
+        let mut start: DateTime<Tz> = parse::to_local(tz, date, start_req)?;
+        if req.date.is_none() && start < now_local {
+            date = date.succ_opt().ok_or(RequestError::DateOutOfRange)?;
+            start = parse::to_local(tz, date, start_req)?;
+        }
         if start < now_local {
             return Err(RequestError::StartInPast);
         }
+        let end = parse::to_local(tz, date, end_req)?;
         Ok(Self {
             date: date,
             start: start.with_timezone(&Utc),
-            end: end,
+            end: end.with_timezone(&Utc),
             user: user,
             description: req.description,
-            status: match start {
-
-            }
+            status: Status::Scheduled
         })
     }
 }
