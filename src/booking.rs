@@ -100,6 +100,16 @@ impl Booking {
             status: Status::Scheduled
         })
     }
+    pub fn duration(&self) -> Duration {
+        self.end - self.start
+    }
+    /// Returns number of hours (fractional) between start and end
+    pub fn hours(&self) -> f64 {
+        self.duration().num_minutes() as f64 / 60.0
+    }
+    pub fn overlaps(&self, other: &Booking) -> bool {
+        false
+    }
 }
 #[cfg(test)]
 mod tests {
