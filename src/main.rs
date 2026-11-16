@@ -1,9 +1,12 @@
 #[warn(unused_imports)]
 use chrono::prelude::*;
 use poise::serenity_prelude as serenity;
+pub struct Data {
+    pub tz: chrono_tz::Tz,
+    pub lock: tokio::sync::Mutex<()>
+}
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
-pub struct Data {}
 mod commands;
 
 #[tokio::main]
