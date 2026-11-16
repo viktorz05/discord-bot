@@ -1,9 +1,5 @@
 use chrono::prelude::*;
 use poise::serenity_prelude as serenity;
-mod commands;
-mod parse;
-mod booking;
-
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
 pub struct Data {}
@@ -14,4 +10,6 @@ async fn main() {
     println!("My token: {}", token);
     let now = Local::now();
     println!("Today is: {}", now);
+    let now_utc = Utc::now();
+    println!("Today is: {} ", now_utc);
 }

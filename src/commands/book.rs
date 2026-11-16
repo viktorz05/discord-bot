@@ -1,4 +1,5 @@
 use crate::{Context, Error};
+use booking::UserRequest;
 use chrono::prelude::*;
 
 #[poise::command(slash_command)]
@@ -17,6 +18,8 @@ pub async fn book(
     /// 2. Create a Booking struct with the remaining values
     /// 3. Fetch the Sheet's rows and find conflicts
     /// 4. Write to the Sheet
-
+    let user_req = UserRequest {
+        
+    };
     Ok(())
 }
