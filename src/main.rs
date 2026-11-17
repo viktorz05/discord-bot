@@ -1,5 +1,8 @@
+use std::time::Duration;
+
 #[warn(unused_imports)]
 use chrono::prelude::*;
+use discord_bot::{ghub::{self, Hub}, config, sheets};
 use poise::serenity_prelude as serenity;
 pub struct Data {
     pub tz: chrono_tz::Tz,
@@ -12,9 +15,17 @@ mod commands;
 #[tokio::main]
 async fn main() {
     let token = dotenv::var("DISCORD_TOKEN").expect("Expected a token in the environment");
+    let conf = config::Config::new();
     println!("My token: {}", token);
-    let now = Local::now();
-    println!("Today is: {}", now);
-    let now_utc = Utc::now();
-    println!("Today is: {} ", now_utc);
+    let http_client = reqwest::Client::builder()
+    .connect_timeout(Duration::from_millis(200))
+    .https_only(true)
+    .build()
+    .unwrap();
+    let g_hub = ghub::build_hub(&conf).await.unwrap();
+    let g_client = sheets::SheetsClient {
+        http: http_client,
+        auth: g_hub,
+        config: conf,
+    };
 }

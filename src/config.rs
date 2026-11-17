@@ -4,7 +4,7 @@ pub struct Config {
 }
 
 impl Config {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Config {
             priv_key: String::from("credentials.json"),
             sheet_id: String::from("sheet_id")
