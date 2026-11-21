@@ -1,15 +1,35 @@
+use core::fmt;
+use std::str::FromStr;
+use strum_macros::EnumString;
 use thiserror::Error;
 use chrono::{DateTime, Duration, NaiveDate, Timelike, Utc};
 use chrono_tz::Tz;
 use dateparser;
 use crate::parse;
 use log::{debug, info};
-
-#[derive(Debug, PartialEq)]
+// Sheet column order, defined once and used by both to_row() and try_from().
+const COL_DATE: usize = 0;
+const COL_START: usize = 1; 
+const COL_END: usize = 2; 
+const COL_LAB_TIME: usize = 2; // display only, never read back
+const COL_USER: usize = 4;
+const COL_DESCRIPTION: usize = 5;
+const COL_STATUS: usize = 6;
+const MAX_BOOKING_TIME: usize = 4;
+#[derive(Debug, PartialEq, EnumString)]
 pub enum Status {
     Scheduled,
     Released,
     NightBatch,
+}
+impl fmt::Display for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Status::Scheduled => write!(f, "Scheduled"),
+            Status::Released => write!(f, "Released"),
+            Status::NightBatch => write!(f, "Night Batch"),
+        }
+    }
 }
 #[derive(Error, Debug)]
 pub enum RequestError {
@@ -23,7 +43,7 @@ pub enum RequestError {
     StartInPast,
 
     #[error("Bookings must not exceed {max_hours:?} hours.")]
-    TooLong { max_hours: i64 },
+    TooLong { max_hours: usize },
 
     #[error("The time you entered is ambiguous.")]
     AmbiguousLocalTime,
@@ -77,7 +97,7 @@ impl Booking {
 
         let total_hours = (parsed_end - parsed_start).num_hours();
         if total_hours > 4 {
-            return Err(RequestError::TooLong { max_hours: 4 })
+            return Err(RequestError::TooLong { max_hours: MAX_BOOKING_TIME })
         }
         let status = match is_night_batch(tz, parsed_start, parsed_end) {
             true => Status::NightBatch,
@@ -129,11 +149,56 @@ impl Booking {
     pub fn overlaps(&self, other: &Booking) -> bool {
         false
     }
+
+    pub fn to_row(&self, lab_tz: Tz) -> Vec<String> {
+        let s = self.start.with_timezone(&lab_tz);
+        let e = self.end.with_timezone(&lab_tz);
+        let mut row = vec![String::new(); COL_STATUS + 1];
+        row[COL_START] = s.to_rfc3339();
+        row[COL_END] = e.to_rfc3339();
+        row[COL_USER] = self.user.clone();
+        row[COL_DESCRIPTION] = self.description.clone().unwrap_or_default();
+        row[COL_STATUS] = match self.status {
+            Status::Scheduled => "Scheduled".into(),
+            Status::Released => "Released".into(),
+            Status::NightBatch => "Night Batch".into() 
+        };
+        row
+    }
+}
+
+impl TryFrom<&[String]> for Booking {
+    type Error = String;
+    fn try_from(row: &[String]) -> Result<Self, Self::Error> {
+        let cell = |i: usize| row.get(i).map(|s| s.trim()).filter(|s| s.is_empty());  
+        let parse_dt = |i: usize, name: &str| -> Result<DateTime<Utc>, String> {
+            cell(i)
+                .ok_or_else(|| format!("missing {name}"))?
+                .parse::<DateTime<Utc>>()
+                .map_err(|e| format!("bad {name}: {e}"))
+        };
+
+        let start = parse_dt(COL_START, "start")?;
+        let date = start.date_naive();
+        let end = parse_dt(COL_END, "end")?;
+        if end <= start {
+            return Err("end is not after start".into());
+        }
+
+        Ok(Booking {
+            date,
+            start,
+            end,
+            user: cell(COL_USER).unwrap_or("").to_string(),
+            description: cell(COL_DESCRIPTION).map(String::from),
+            status: Status::from_str(cell(COL_STATUS).unwrap_or("Scheduled")).unwrap()
+        })
+    }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{assert_eq, println};
+    use std::{assert_eq};
     use std::error::Error;
     use chrono::prelude::*;
     use dateparser::parse_with_timezone;

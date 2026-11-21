@@ -35,6 +35,9 @@ pub async fn book(
             return Ok(())
         }
     };
+    ctx.defer().await?;
+    let _guard = ctx.data().lock.lock().await;
+    ctx.data().sheets.append(&booking).await?;
     ctx.say(format!(
     "Booked: <t:{}:f> → <t:{}:f> ({:.1}h)",
     booking.start.timestamp(), booking.end.timestamp(), booking.hours()

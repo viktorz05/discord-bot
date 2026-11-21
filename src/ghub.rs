@@ -8,7 +8,7 @@ use hyper_util::{
 use crate::config::{Config};
 pub type Hub = Sheets<HttpsConnector<HttpConnector>>;
 
-pub async fn build_hub(conf: &Config) -> Result<Hub > {
+pub async fn build_hub(conf: &Config) -> Result<Hub> {
     let secret = yup_oauth2::read_service_account_key(&conf.priv_key).await?;
     let auth = yup_oauth2::ServiceAccountAuthenticator::builder(secret)
         .build()
