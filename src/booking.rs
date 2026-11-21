@@ -1,9 +1,10 @@
 use thiserror::Error;
-use chrono::{DateTime, Duration, NaiveDate, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Timelike, Utc};
 use chrono_tz::Tz;
 use dateparser;
-use log::{debug, info};
 use crate::parse;
+use log::{debug, info};
+
 #[derive(Debug, PartialEq)]
 pub enum Status {
     Scheduled,
@@ -46,6 +47,15 @@ pub struct Booking {
     pub status: Status
 }
 
+/// night: anytime after 7 pm Local Vancouver TZ
+/// morning: anytime before 10 am Local Vancouver TZ
+pub fn is_night_batch(tz: Tz, start: DateTime<Utc>, end: DateTime<Utc>) -> bool {
+    let local_start = parse::to_local(tz, start.date_naive(), start.time()).unwrap();
+    let local_end = parse::to_local(tz, end.date_naive(), end.time()).unwrap();
+    return local_start.hour() > 20 && local_end.hour() < 10
+}
+
+/// something
 impl Booking {
     pub fn from_req(
         req: UserRequest,
@@ -64,6 +74,15 @@ impl Booking {
         let parsed_end = dateparser::parse_with_timezone(&req.end_time, &Utc)
         .map_err(|_| RequestError::InvalidTimeFormat { found: req.end_time.clone() })?;
         debug!{"Parsed end time: {}", parsed_end};
+
+        let total_hours = (parsed_end - parsed_start).num_hours();
+        if total_hours > 4 {
+            return Err(RequestError::TooLong { max_hours: 4 })
+        }
+        let status = match is_night_batch(tz, parsed_start, parsed_end) {
+            true => Status::NightBatch,
+            false => Status::Scheduled
+        };
         // get date
         let mut date = match &req.date {
             Some(d) => dateparser::parse_with_timezone(d, &Utc)
@@ -97,7 +116,7 @@ impl Booking {
             end: end2.with_timezone(&Utc),
             user: user.to_string(),
             description: req.description,
-            status: Status::Scheduled
+            status: status
         })
     }
     pub fn duration(&self) -> Duration {
@@ -118,6 +137,7 @@ mod tests {
     use std::error::Error;
     use chrono::prelude::*;
     use dateparser::parse_with_timezone;
+
 
     #[test]
     pub fn parse_date() {
@@ -152,16 +172,16 @@ mod tests {
             description: Some("Proj 1".to_string()),
         };
         let parsed_start = parse_with_timezone(&req.start_time, &Utc)?;
-        println!("start time: {}", parsed_start);
+        debug!("start time: {}", parsed_start);
         let parsed_end = parse_with_timezone(&req.end_time, &Utc)?;
-        println!("end time: {}", parsed_end);
+        debug!("end time: {}", parsed_end);
         let end_date = if parsed_end.time() <= parsed_start.time() {
             today + Duration::days(1)
         } else {
             today
         };
         let end = end_date.and_time(parsed_end.time());
-        println!("end booking: {}", end);
+        info!("end booking: {}", end);
         assert_eq!(end, tmr.and_hms(8, 0, 0));
         Ok(())
         }

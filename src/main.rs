@@ -1,4 +1,6 @@
 #[warn(unused_imports)]
+#[macro_use]
+extern crate log;
 use chrono::prelude::*;
 use poise::serenity_prelude as serenity;
 pub struct Data {
@@ -11,6 +13,7 @@ mod commands;
 
 #[tokio::main]
 async fn main() {
+    colog::init();
     let token = dotenv::var("DISCORD_TOKEN").expect("Expected a token in the environment");
     println!("My token: {}", token);
     let now = Local::now();
